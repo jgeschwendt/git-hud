@@ -2,7 +2,11 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ["v*.*.*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -25,42 +29,29 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - run: bun install --frozen-lockfile
-      - run: bun --bun next build
 
-      - name: Build package
-        env:
+      - env:
           BUILD_TARGET: ${{ matrix.target }}
-        run: bash scripts/build.sh
+        run: bun run build
 
-      - name: Extract platform name
-        id: platform
-        run: |
-          TARGET="${{ matrix.target }}"
-          PLATFORM="${TARGET#bun-}"
-          echo "name=$PLATFORM" >> $GITHUB_OUTPUT
+      - run: echo "platform=${{ matrix.target }}" | sed 's/bun-//' >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         with:
-          name: git-hud-${{ steps.platform.outputs.name }}
-          path: dist/git-hud-${{ steps.platform.outputs.name }}.tar.gz
+          name: ${{ env.platform }}
+          path: dist/${{ env.platform }}.tar.gz
 
   release:
     needs: build
-    runs-on: ubuntu-latest
     permissions:
       contents: write
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-
-      - name: Flatten artifacts
-        run: |
-          mkdir -p binaries
-          find artifacts -type f -exec mv {} binaries/ \;
-          ls -lh binaries/
+          merge-multiple: true
+          path: binaries
 
       - uses: softprops/action-gh-release@v2
         with:
           files: binaries/*
-          generate_release_notes: true

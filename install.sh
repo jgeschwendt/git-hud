@@ -30,7 +30,7 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-PACKAGE_NAME="git-hud-${OS}-${ARCH}.tar.gz"
+PACKAGE_NAME="${OS}-${ARCH}.tar.gz"
 RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${PACKAGE_NAME}"
 
 echo "Installing git-hud v${VERSION} for ${OS}-${ARCH}..."
@@ -56,7 +56,7 @@ fi
 echo "Extracting..."
 tar -xzf "${TEMP_DIR}/${PACKAGE_NAME}" -C "$TEMP_DIR"
 rm -rf "${INSTALL_DIR}/app" 2>/dev/null || true
-mv "${TEMP_DIR}/git-hud-${OS}-${ARCH}" "${INSTALL_DIR}/app"
+mv "${TEMP_DIR}/${OS}-${ARCH}" "${INSTALL_DIR}/app"
 rm -rf "$TEMP_DIR"
 
 # Create symlink in bin
@@ -79,8 +79,11 @@ fi
 echo ""
 echo "✓ Installation complete!"
 echo ""
+echo "Installed version: $VERSION"
+"${INSTALL_DIR}/bin/git-hud" version
+echo ""
 echo "Start git-hud:"
-echo "  ${INSTALL_DIR}/bin/git-hud start"
+echo "  ${INSTALL_DIR}/bin/git-hud"
 echo ""
 echo "Or reload your shell and run:"
-echo "  git-hud start"
+echo "  git-hud"

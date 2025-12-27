@@ -1,10 +1,22 @@
 # git-hud Documentation
 
-Technical documentation for git-hud v2 implementation.
+Technical documentation for git-hud.
+
+> **Note:** Most docs in this directory are planning documents for future features.
+> Only **DEPLOYMENT.md** reflects the current v0.1.1 implementation.
 
 ---
 
-## Documents
+## Current Documentation
+
+### [DEPLOYMENT.md](./DEPLOYMENT.md) ✅ **Up to date**
+Build, release, and installation processes for v0.1.1.
+
+---
+
+## Planning Documents
+
+The following are architectural planning docs for future features:
 
 ### [ARCHITECTURE.md](./ARCHITECTURE.md)
 System design and architectural decisions.
