@@ -1,9 +1,40 @@
 # Bare Worktree Manager - Bun Rewrite Implementation Plan
 
-**Version:** 2.0  
-**Target:** Single binary distribution with Bun  
-**Timeline:** 8-12 days  
-**Status:** Planning
+**Version:** 2.0
+**Target:** Single binary distribution with Bun
+**Timeline:** 8-12 days
+**Status:** v0.1.1 shipped - partial implementation
+
+---
+
+## Progress Summary (v0.1.1)
+
+### Completed ✅
+- Single binary (~57MB) via `bun build --compile`
+- SQLite database with full schema (repositories, worktrees, remotes, config)
+- Clone repository as bare with `__main__` worktree
+- Delete repository (cascades to worktrees)
+- SSE push-based live updates (using `globalThis` for cross-route state)
+- Three-tier state reconciliation for repository CRUD
+- Auto-update mechanism in CLI
+- MCP server at `/mcp` with 3 tools
+- Tailwind UI dashboard
+
+### Not Implemented ⚠️
+- Worktree create/delete (code exists in `git.ts`, not exposed)
+- File sharing symlinks (`shareFiles()` never called)
+- VSCode integration (schema only, no launch/tracking logic)
+- Background git status refresh
+- UI showing worktrees per repository (only shows repos)
+- MCP worktree tools (`list_worktrees`, `create_worktree`, `delete_worktree`)
+
+### Key Files
+- `src/lib/clone.ts` - Clone orchestration with events
+- `src/lib/repository.ts` - Repository CRUD with events
+- `src/lib/git.ts` - Git operations (worktree code exists here)
+- `src/lib/events.ts` - SSE event emitter via globalThis
+- `src/app/mcp/route.ts` - MCP server with SDK
+- `src/app/api/events/route.ts` - SSE endpoint
 
 ---
 

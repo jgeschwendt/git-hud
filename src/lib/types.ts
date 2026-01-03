@@ -8,6 +8,7 @@ export type Repository = {
   clone_url: string
   local_path: string
   type: string | null
+  default_branch: string
   last_synced: number
   created_at: number
 }
@@ -17,7 +18,7 @@ export type Worktree = {
   repo_id: string
   branch: string
   head: string | null
-  status: 'creating' | 'ready' | 'error'
+  status: 'creating' | 'ready' | 'error' | 'deleting'
   commit_message: string | null
   created_at: number
   dirty: boolean

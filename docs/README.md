@@ -1,10 +1,42 @@
 # git-hud Documentation
 
-Technical documentation for git-hud v2 implementation.
+Technical documentation for git-hud.
+
+> **Note:** Most docs in this directory are planning documents for future features.
+> See "Current vs Planned" below to understand what's implemented.
 
 ---
 
-## Documents
+## Current State (v0.1.1)
+
+**Implemented:**
+- Single binary distribution via `bun build --compile`
+- SQLite database with full schema
+- Repository clone/delete via UI and MCP
+- SSE push-based live updates (repo events)
+- MCP server at `/mcp` with 3 tools: `list_repositories`, `delete_repository`, `clone_repository`
+- Three-tier state reconciliation for repositories
+- Auto-update mechanism
+
+**Not yet implemented:**
+- Worktree create/delete (code in `src/lib/git.ts`, not exposed)
+- File sharing symlinks (code exists, never called)
+- VSCode integration (schema only)
+- UI showing worktrees (only shows repositories)
+- MCP worktree tools
+
+---
+
+## Current Documentation
+
+### [DEPLOYMENT.md](./DEPLOYMENT.md) ✅ **Up to date**
+Build, release, and installation processes for v0.1.1.
+
+---
+
+## Planning Documents
+
+The following are architectural planning docs for future features:
 
 ### [ARCHITECTURE.md](./ARCHITECTURE.md)
 System design and architectural decisions.

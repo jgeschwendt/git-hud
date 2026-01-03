@@ -1,4 +1,4 @@
-# git-hud
+# grove
 
 Git worktree dashboard with bare repository management.
 
@@ -14,18 +14,18 @@ Git worktree dashboard with bare repository management.
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jgeschwendt/git-hud/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jgeschwendt/grove/main/install.sh | bash
 ```
 
-Installs to `~/.git-hud/` and adds to PATH.
+Installs to `~/.grove/` and adds to PATH.
 
 ## Usage
 
 ```bash
-git-hud start
+grove
 ```
 
-Visit http://localhost:3000
+Visit http://localhost:7777
 
 ### Clone a Repository
 
@@ -33,10 +33,10 @@ Enter a Git URL (GitHub, GitLab, Bitbucket) in the sidebar and click Clone.
 
 Repositories are cloned to:
 ```
-~/.git-hud/clones/{provider}/{username}/{repo}/
+~/code/{username}/{repo}/
   ├── .bare/          # Bare git repository
   ├── .git            # File pointing to .bare
-  └── __main__/       # Primary worktree
+  └── .main/          # Primary worktree
 ```
 
 ### Create Worktrees
@@ -47,13 +47,13 @@ Repositories are cloned to:
 
 New worktrees are created as siblings:
 ```
-~/.git-hud/clones/github/user/repo/
-  ├── __main__/
-  ├── __feature-auth__/
-  └── __bugfix-login__/
+~/code/user/repo/
+  ├── .main/
+  ├── feature--auth/
+  └── bugfix--login/
 ```
 
-Shared files from `__main__` (like `.env`, `.claude/`) are automatically symlinked.
+Shared files from `.main` (like `.env`, `.claude/`) are automatically symlinked.
 
 ## Development
 

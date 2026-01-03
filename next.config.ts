@@ -1,8 +1,15 @@
-import type { NextConfig } from 'next'
+import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  output: 'standalone',
-  reactStrictMode: true,
-}
+  cacheComponents: true,
+  output: "standalone",
+  reactCompiler: true,
+  async redirects() {
+    return [{ destination: "/", permanent: true, source: "/home" }];
+  },
+  async rewrites() {
+    return [{ destination: "/home", source: "/" }];
+  },
+};
 
-export default config
+export default config;

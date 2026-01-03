@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.git-hud"
-REPO="jgeschwendt/git-hud"
+INSTALL_DIR="${HOME}/.grove"
+REPO="jgeschwendt/grove"
 
 # Detect platform
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -30,10 +30,10 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-PACKAGE_NAME="git-hud-${OS}-${ARCH}.tar.gz"
+PACKAGE_NAME="${OS}-${ARCH}.tar.gz"
 RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${PACKAGE_NAME}"
 
-echo "Installing git-hud v${VERSION} for ${OS}-${ARCH}..."
+echo "Installing grove v${VERSION} for ${OS}-${ARCH}..."
 
 # Create directory structure
 mkdir -p "${INSTALL_DIR}/data"
@@ -56,31 +56,45 @@ fi
 echo "Extracting..."
 tar -xzf "${TEMP_DIR}/${PACKAGE_NAME}" -C "$TEMP_DIR"
 rm -rf "${INSTALL_DIR}/app" 2>/dev/null || true
-mv "${TEMP_DIR}/git-hud-${OS}-${ARCH}" "${INSTALL_DIR}/app"
+mv "${TEMP_DIR}/${OS}-${ARCH}" "${INSTALL_DIR}/app"
 rm -rf "$TEMP_DIR"
 
 # Create symlink in bin
 mkdir -p "${INSTALL_DIR}/bin"
-ln -sf "${INSTALL_DIR}/app/git-hud" "${INSTALL_DIR}/bin/git-hud"
+ln -sf "${INSTALL_DIR}/app/grove" "${INSTALL_DIR}/bin/grove"
 
-# Add to PATH
-SHELL_RC="${HOME}/.zshrc"
-if [ -f "${HOME}/.bashrc" ]; then
+# Add to PATH - detect shell config file
+if [ -n "${SHELL:-}" ] && [[ "$SHELL" == *"zsh"* ]]; then
+  # Prefer .zshenv for zsh (sourced for all shells)
+  if [ -f "${HOME}/.zshenv" ]; then
+    SHELL_RC="${HOME}/.zshenv"
+  else
+    SHELL_RC="${HOME}/.zshrc"
+  fi
+elif [ -f "${HOME}/.bash_profile" ]; then
+  SHELL_RC="${HOME}/.bash_profile"
+elif [ -f "${HOME}/.bashrc" ]; then
   SHELL_RC="${HOME}/.bashrc"
+else
+  # Fallback to .zshrc
+  SHELL_RC="${HOME}/.zshrc"
 fi
 
-if ! grep -q ".git-hud/bin" "$SHELL_RC" 2>/dev/null; then
+if ! grep -q ".grove/bin" "$SHELL_RC" 2>/dev/null; then
   echo '' >> "$SHELL_RC"
-  echo '# git-hud' >> "$SHELL_RC"
-  echo 'export PATH="$HOME/.git-hud/bin:$PATH"' >> "$SHELL_RC"
+  echo '# grove' >> "$SHELL_RC"
+  echo 'export PATH="$HOME/.grove/bin:$PATH"' >> "$SHELL_RC"
   echo "Added to PATH in $SHELL_RC"
 fi
 
 echo ""
 echo "✓ Installation complete!"
 echo ""
-echo "Start git-hud:"
-echo "  ${INSTALL_DIR}/bin/git-hud start"
+echo "Installed version: $VERSION"
+"${INSTALL_DIR}/bin/grove" version
+echo ""
+echo "Start grove:"
+echo "  ${INSTALL_DIR}/bin/grove"
 echo ""
 echo "Or reload your shell and run:"
-echo "  git-hud start"
+echo "  grove"

@@ -2,6 +2,10 @@
 
 This document explains how git-hud handles concurrent operations without UI race conditions.
 
+> **Current Status (v0.1.1):** This pattern is implemented for **repositories** in
+> `src/app/home/components/repository-table.tsx`. The examples below use "worktree"
+> terminology from the original design, but the same pattern applies.
+
 ---
 
 ## The Problem

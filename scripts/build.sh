@@ -11,7 +11,6 @@ echo "==> Detecting platform..."
 if [ -n "${BUILD_TARGET:-}" ]; then
   TARGET="$BUILD_TARGET"
   PLATFORM="${TARGET#bun-}"
-  PACKAGE="git-hud-${PLATFORM}"
 else
   OS=$(uname -s | tr '[:upper:]' '[:lower:]')
   ARCH=$(uname -m)
@@ -22,17 +21,24 @@ else
 
   TARGET="bun-${OS}-${ARCH}"
   PLATFORM="${OS}-${ARCH}"
-  PACKAGE="git-hud-${PLATFORM}"
 fi
+
+PACKAGE="${PLATFORM}"
 
 echo "==> Compiling binary for $TARGET..."
 mkdir -p "dist/$PACKAGE"
 
+# Get git commit hash
+COMMIT=$(git rev-parse --short HEAD)
+
 bun build --compile \
-  --minify \
   --target="$TARGET" \
-  --outfile="dist/$PACKAGE/git-hud" \
-  ./cli/index.ts
+  --define "process.env.NODE_ENV=\"production\"" \
+  --define "process.env.BUILD_COMMIT=\"$COMMIT\"" \
+  --jsx-runtime automatic \
+  --jsx-import-source react \
+  --outfile="dist/$PACKAGE/grove" \
+  ./cli/index.tsx
 
 echo "==> Packaging standalone assets..."
 cp -r .next/standalone/* "dist/$PACKAGE/"
