@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+      - run: bun --bun next build
+
+      - name: Build package
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: bash scripts/build.sh
+
+      - name: Extract platform name
+        id: platform
+        run: |
+          TARGET="${{ matrix.target }}"
+          PLATFORM="${TARGET#bun-}"
+          echo "name=$PLATFORM" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: git-hud-${{ steps.platform.outputs.name }}
+          path: dist/git-hud-${{ steps.platform.outputs.name }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p binaries
+          find artifacts -type f -exec mv {} binaries/ \;
+          ls -lh binaries/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: binaries/*
+          generate_release_notes: true
