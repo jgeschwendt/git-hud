@@ -6,6 +6,35 @@
 
 ---
 
+## Progress Summary (v0.1.1)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 0: Architecture | ✅ Complete | Docs written |
+| Phase 1: Hello World | ✅ Complete | Binary builds, installs, runs |
+| Phase 2: Data Models | ✅ Complete | SQLite schema implemented |
+| Phase 3: Git Operations | ⚠️ Partial | Clone works; worktree create/delete code exists but not exposed |
+| Phase 4: Events & SSE | ⚠️ Partial | Repo events work; worktree events not implemented |
+| Phase 5: UI Components | ⚠️ Partial | Repository CRUD done; worktree UI not implemented |
+
+**What's working:**
+- `curl | bash` installation
+- Clone/delete repositories via UI and MCP
+- SSE push updates for repository changes
+- Three-tier state reconciliation (for repositories)
+- Auto-update mechanism
+- MCP server with `list_repositories`, `delete_repository`, `clone_repository`
+
+**What's not implemented:**
+- Worktree create/delete (code in `git.ts`, not exposed to UI/MCP)
+- File sharing (`shareFiles()` exists, never called)
+- VSCode integration (schema only)
+- Background status refresh
+- UI showing worktrees (only shows repositories)
+- MCP worktree tools
+
+---
+
 ## Phase 0: Architecture Foundation
 
 Before writing any application code, establish the structural patterns that will guide all implementation.

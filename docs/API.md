@@ -2,6 +2,14 @@
 
 git-hud uses Next.js Server Actions for mutations and SSE endpoints for streaming progress.
 
+> **Current Status (v0.1.1):**
+> - ✅ `cloneRepository` - implemented via `src/lib/clone.ts`
+> - ✅ `deleteRepository` - implemented via `src/lib/repository.ts`
+> - ✅ SSE `/api/events` - push-based repo events
+> - ✅ MCP `/mcp` - 3 tools (list, clone, delete repos)
+> - ⚠️ `createWorktree`, `deleteWorktree`, `syncMainWorktree` - not yet implemented
+> - ⚠️ `/api/worktree/[path]/stream` - not yet implemented
+
 ---
 
 ## Server Actions

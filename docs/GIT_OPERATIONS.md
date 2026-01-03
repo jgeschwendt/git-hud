@@ -2,6 +2,12 @@
 
 This document details all git workflows used by git-hud.
 
+> **Current Status (v0.1.1):**
+> - ✅ Repository cloning - fully implemented in `src/lib/clone.ts`
+> - ⚠️ Worktree create/remove - code exists in `src/lib/git.ts`, not exposed to UI/MCP
+> - ⚠️ File sharing - `shareFiles()` exists but never called
+> - ⚠️ Status tracking - `getGitStatus()` runs once at clone, no background refresh
+
 ---
 
 ## Repository Cloning

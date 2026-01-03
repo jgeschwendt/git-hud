@@ -19,10 +19,11 @@ console.log('1. Creating repository...')
 const repoId = insertRepository({
   provider: 'github',
   username: 'jgeschwendt',
-  name: 'git-hud',
-  clone_url: 'https://github.com/jgeschwendt/git-hud.git',
-  local_path: '/Users/test/.git-hud/clones/github/jgeschwendt/git-hud',
+  name: 'grove',
+  clone_url: 'https://github.com/jgeschwendt/grove.git',
+  local_path: '/Users/test/.grove/clones/github/jgeschwendt/grove',
   type: 'bare',
+  default_branch: 'main',
   last_synced: Date.now()
 })
 console.log('✓ Created repository:', repoId)
@@ -38,7 +39,7 @@ console.log('✓ Found', repos.length, 'repositories')
 // Test worktree operations
 console.log('\n4. Creating worktree...')
 insertWorktree({
-  path: '/Users/test/.git-hud/clones/github/jgeschwendt/git-hud/__main__',
+  path: '/Users/test/.grove/clones/github/jgeschwendt/grove/.main',
   repo_id: repoId,
   branch: 'main',
   head: 'abc123',
@@ -63,7 +64,7 @@ console.log('✓ Updated worktree status to ready')
 
 console.log('\n7. Creating feature worktree...')
 insertWorktree({
-  path: '/Users/test/.git-hud/clones/github/jgeschwendt/git-hud/__feature-test__',
+  path: '/Users/test/.grove/clones/github/jgeschwendt/grove/__feature-test__',
   repo_id: repoId,
   branch: 'feature/test',
   head: 'def456',

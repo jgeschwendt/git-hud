@@ -2,6 +2,9 @@
 
 git-hud uses SQLite for all persistent data storage.
 
+> **Implementation:** Schema and queries are in `src/lib/db.ts` using `bun:sqlite`.
+> Some code samples below show alternative patterns from planning docs.
+
 ---
 
 ## Schema

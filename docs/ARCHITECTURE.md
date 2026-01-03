@@ -2,6 +2,9 @@
 
 This document outlines the foundational architectural decisions that guide all implementation.
 
+> **Current Status (v0.1.1):** Core architecture implemented. Repository CRUD works.
+> Worktree operations exist in code but not exposed. See `docs/README.md` for details.
+
 ---
 
 ## Directory Architecture

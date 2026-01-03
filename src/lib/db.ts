@@ -1,15 +1,17 @@
 import { Database } from 'bun:sqlite'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { mkdirSync } from 'fs'
 import type { Repository, Worktree, Remote, WorktreeConfig } from './types'
 
-const DB_PATH = process.env.GIT_HUD_ROOT
-  ? join(process.env.GIT_HUD_ROOT, 'data', 'repos.db')
-  : join(process.env.HOME!, '.git-hud', 'data', 'repos.db')
+const DB_PATH = process.env.GROVE_ROOT
+  ? join(process.env.GROVE_ROOT, 'data', 'repos.db')
+  : join(process.env.HOME!, '.grove', 'data', 'repos.db')
 
 let db: Database | null = null
 
 export function getDb(): Database {
   if (!db) {
+    mkdirSync(dirname(DB_PATH), { recursive: true })
     db = new Database(DB_PATH, { create: true })
     db.exec('PRAGMA journal_mode = WAL')
     db.exec('PRAGMA foreign_keys = ON')
@@ -28,6 +30,7 @@ function initSchema(db: Database): void {
       clone_url TEXT NOT NULL,
       local_path TEXT NOT NULL UNIQUE,
       type TEXT,
+      default_branch TEXT NOT NULL DEFAULT 'main',
       last_synced INTEGER NOT NULL,
       created_at INTEGER NOT NULL,
       UNIQUE(provider, username, name)
@@ -74,6 +77,13 @@ function initSchema(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_worktrees_status ON worktrees(status);
     CREATE INDEX IF NOT EXISTS idx_remotes_repo ON remotes(repo_id);
   `)
+
+  // Migration: add default_branch column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE repositories ADD COLUMN default_branch TEXT NOT NULL DEFAULT 'main'`)
+  } catch {
+    // Column already exists
+  }
 }
 
 // Repository queries
@@ -84,9 +94,9 @@ export function insertRepository(repo: Omit<Repository, 'id' | 'created_at'>): s
   const now = Date.now()
 
   db.prepare(`
-    INSERT INTO repositories (id, provider, username, name, clone_url, local_path, type, last_synced, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, repo.provider, repo.username, repo.name, repo.clone_url, repo.local_path, repo.type, repo.last_synced, now)
+    INSERT INTO repositories (id, provider, username, name, clone_url, local_path, type, default_branch, last_synced, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, repo.provider, repo.username, repo.name, repo.clone_url, repo.local_path, repo.type, repo.default_branch, repo.last_synced, now)
 
   return id
 }

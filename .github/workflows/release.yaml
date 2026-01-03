@@ -1,0 +1,57 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: bun run build
+
+      - run: echo "platform=${{ matrix.target }}" | sed 's/bun-//' >> $GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.platform }}
+          path: dist/${{ env.platform }}.tar.gz
+
+  release:
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: binaries
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: binaries/*

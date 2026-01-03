@@ -2,7 +2,7 @@
 
 ## Basic Memory
 
-**Session start**: `get_current_project` → if not `git-hud`, use `switch_project`.
+**Session start**: `get_current_project` → if not `grove`, use `switch_project`.
 
 **Before work**: `search_notes` for related patterns/decisions.
 

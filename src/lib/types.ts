@@ -8,6 +8,7 @@ export type Repository = {
   clone_url: string
   local_path: string
   type: string | null
+  default_branch: string
   last_synced: number
   created_at: number
 }
