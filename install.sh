@@ -15,7 +15,7 @@ fi
 # Fetch latest version from GitHub
 echo "Fetching latest release..."
 if command -v curl &> /dev/null; then
-  LATEST_JSON=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")
+  LATEST_JSON=$(curl -fsSL --tlsv1.2 "https://api.github.com/repos/${REPO}/releases/latest")
 elif command -v wget &> /dev/null; then
   LATEST_JSON=$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest")
 else
@@ -44,9 +44,9 @@ mkdir -p "${INSTALL_DIR}/logs"
 TEMP_DIR=$(mktemp -d)
 echo "Downloading from $RELEASE_URL..."
 if command -v curl &> /dev/null; then
-  curl -fsSL "$RELEASE_URL" -o "${TEMP_DIR}/${PACKAGE_NAME}"
+  curl -fL# --tlsv1.2 "$RELEASE_URL" -o "${TEMP_DIR}/${PACKAGE_NAME}"
 elif command -v wget &> /dev/null; then
-  wget -q -O "${TEMP_DIR}/${PACKAGE_NAME}" "$RELEASE_URL"
+  wget --progress=bar:force -O "${TEMP_DIR}/${PACKAGE_NAME}" "$RELEASE_URL"
 else
   echo "Error: curl or wget required"
   exit 1

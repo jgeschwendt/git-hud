@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-import { appendFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { json } from "node:stream/consumers";
 
 const log = (message) =>
-  appendFile(
+  writeFile(
     `${import.meta.filename}.log`,
     `[${new Date().toISOString()}] ${message}\n`,
   );
 
 try {
   const data = await json(process.stdin);
+  console.log("[sl2]");
   await log(JSON.stringify(data, undefined, 2));
 } catch (error) {
   if (error instanceof Error) {

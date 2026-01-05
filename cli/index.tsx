@@ -171,15 +171,16 @@ function startServer() {
   const binaryPath = process.execPath;
   const binaryDir = dirname(binaryPath);
   const serverPath = join(binaryDir, "server.js");
+  const bunPath = join(binaryDir, "bun");
 
-  const server = spawn("bun", ["run", serverPath], {
+  const server = spawn(bunPath, ["run", serverPath], {
     cwd: binaryDir,
     env: {
       ...process.env,
       PORT: String(PORT),
       NODE_ENV,
     },
-    stdio: "ignore",
+    stdio: "inherit",
   });
 
   server.on("error", (err) => {
