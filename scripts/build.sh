@@ -70,7 +70,7 @@ cp -r .next/standalone/.next "dist/$PACKAGE/"
 
 echo "==> Pruning unnecessary files..."
 # Keep only required node_modules
-KEEP_MODULES="next @next @swc styled-jsx react react-dom client-only execa"
+KEEP_MODULES="next @next @swc styled-jsx react react-dom client-only"
 for dir in "dist/$PACKAGE/node_modules"/*; do
   name=$(basename "$dir")
   if ! echo "$KEEP_MODULES" | grep -qw "$name"; then

@@ -15,8 +15,15 @@ export async function GET() {
 	const stream = new ReadableStream({
 		start(controller) {
 			// Send initial state immediately on connect
-			const initial = getFullState();
-			controller.enqueue(encoder.encode(`data: ${JSON.stringify(initial)}\n\n`));
+			console.log("[SSE] Client connected, sending initial state...");
+			try {
+				const initial = getFullState();
+				console.log("[SSE] Got state:", initial.repositories.length, "repos");
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify(initial)}\n\n`));
+				console.log("[SSE] Initial state enqueued");
+			} catch (err) {
+				console.error("[SSE] Error getting initial state:", err);
+			}
 
 			// Subscribe to state changes
 			unsubscribe = subscribeState((state: FullState) => {
