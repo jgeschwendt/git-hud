@@ -173,7 +173,7 @@ function startServer() {
   const serverPath = join(binaryDir, "server.js");
   const bunPath = join(binaryDir, "bun");
 
-  const server = spawn(bunPath, ["run", serverPath], {
+  const server = spawn(bunPath, ["--bun", serverPath], {
     cwd: binaryDir,
     env: {
       ...process.env,
