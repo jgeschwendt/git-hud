@@ -36,7 +36,7 @@ async function deleteExistingRepos() {
 	for (const repo of repos) {
 		if (repo.clone_url.includes("jlg.git") || repo.clone_url.includes("jlg.io.git")) {
 			log(`Deleting existing repo: ${repo.name}`);
-			await fetch(`${BASE_URL}/api/repositories?id=${repo.id}`, { method: "DELETE" });
+			await fetch(`${BASE_URL}/api/repositories/${repo.id}`, { method: "DELETE" });
 		}
 	}
 }
@@ -92,10 +92,10 @@ async function main() {
 			observer.observe(document.body, { childList: true, subtree: true });
 		});
 
-		// Run grove grow command
+		// Run grove grow command (using Rust CLI)
 		log("\n=== Running grove grow ===\n");
 
-		const growProcess = spawn("bun", ["run", "cli/index.tsx", "grow", SEED_FILE], {
+		const growProcess = spawn("./target/release/grove", ["grow", SEED_FILE], {
 			cwd: process.cwd(),
 			stdio: ["pipe", "pipe", "pipe"],
 		});

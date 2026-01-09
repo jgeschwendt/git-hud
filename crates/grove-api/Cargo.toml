@@ -1,0 +1,38 @@
+[package]
+name = "grove-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "HTTP/SSE API server for grove"
+
+[dependencies]
+grove-core = { path = "../grove-core" }
+
+# Web framework
+axum = { workspace = true }
+axum-extra = { workspace = true }
+tower-http = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+anyhow = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+async-stream = { workspace = true }
+chrono = { workspace = true }
+
+# Static file embedding
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+
+# MCP
+rmcp = { workspace = true }
+tower-service = "0.3"

@@ -66,17 +66,14 @@ const api = {
     });
   },
 
-  deleteWorktree: (repoId: string, path: string) => {
-    fetch(
-      `/api/worktree?repo_id=${encodeURIComponent(repoId)}&path=${encodeURIComponent(path)}`,
-      {
-        method: "DELETE",
-      },
-    );
+  deleteWorktree: (_repoId: string, path: string) => {
+    fetch(`/api/worktree/${encodeURIComponent(path)}`, {
+      method: "DELETE",
+    });
   },
 
   deleteRepository: (repoId: string) => {
-    fetch(`/api/repositories?id=${encodeURIComponent(repoId)}`, {
+    fetch(`/api/repositories/${encodeURIComponent(repoId)}`, {
       method: "DELETE",
     });
   },
@@ -90,18 +87,16 @@ const api = {
   },
 
   refreshRepository: (repoId: string) => {
-    fetch("/api/refresh", {
+    fetch(`/api/refresh/${encodeURIComponent(repoId)}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_id: repoId }),
     });
   },
 
-  openPath: (path: string, app: "vscode" | "terminal") => {
+  openPath: (path: string, _app: "vscode" | "terminal") => {
     fetch("/api/open", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path, app }),
+      body: JSON.stringify({ path }),
     });
   },
 };
