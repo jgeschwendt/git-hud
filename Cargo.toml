@@ -1,0 +1,71 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+authors = ["grove contributors"]
+license = "MIT"
+repository = "https://github.com/jgeschwendt/grove"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = "0.8"
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+
+# Git (use gix for clone/fetch/status, shell out for worktree mutations)
+gix = { version = "0.77", default-features = false, features = [
+    "blocking-network-client",
+    "blocking-http-transport-reqwest-rust-tls",
+    "status",
+    "revparse-regex",
+] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+tui-textarea = "0.7"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+
+# HTTP client (for updates, LLM API)
+reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest-eventsource = "0.6"
+
+# Static file embedding
+rust-embed = "8"
+mime_guess = "2"
+
+# Async utilities
+async-stream = "0.3"
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+# MCP (Model Context Protocol)
+rmcp = { version = "0.12", features = [
+    "server",
+    "macros",
+    "schemars",
+    "transport-streamable-http-server",
+] }

@@ -1,0 +1,43 @@
+[package]
+name = "grove-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CLI binary for grove"
+
+[[bin]]
+name = "grove"
+path = "src/main.rs"
+
+[dependencies]
+grove-core = { path = "../grove-core" }
+grove-api = { path = "../grove-api" }
+grove-tui = { path = "../grove-tui" }
+
+# CLI
+clap = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+
+# TUI
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+
+# HTTP client
+reqwest = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+futures-util = "0.3"
+
+[build-dependencies]
+# For embedding build commit
+vergen-gitcl = { version = "1", features = ["build", "cargo", "rustc", "si"] }
