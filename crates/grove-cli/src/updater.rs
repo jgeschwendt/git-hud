@@ -5,10 +5,9 @@
 use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 const REPO: &str = "jgeschwendt/grove";
-const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
 /// Get the grove home directory (~/.grove)
 fn grove_home() -> PathBuf {
@@ -26,50 +25,9 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var("HOME").ok().map(PathBuf::from)
 }
 
-/// Path to store last update check timestamp
-fn last_check_path() -> PathBuf {
-    grove_home().join("data").join(".last_update_check")
-}
-
 /// Path to staged update binary
 fn staged_binary_path() -> PathBuf {
     grove_home().join("bin").join("grove.new")
-}
-
-/// Check if we should check for updates (cooldown elapsed)
-fn should_check() -> bool {
-    let path = last_check_path();
-    if !path.exists() {
-        return true;
-    }
-
-    match fs::read_to_string(&path) {
-        Ok(contents) => {
-            if let Ok(timestamp) = contents.trim().parse::<u64>() {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                now.saturating_sub(timestamp) > CHECK_INTERVAL.as_secs()
-            } else {
-                true
-            }
-        }
-        Err(_) => true,
-    }
-}
-
-/// Record that we checked for updates
-fn record_check() {
-    let path = last_check_path();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let _ = fs::write(&path, now.to_string());
 }
 
 /// Get current version from build info
@@ -248,12 +206,7 @@ pub fn check_for_updates_background() {
         }
     }
 
-    // Check if cooldown elapsed
-    if !should_check() {
-        return;
-    }
-
-    // Spawn background task
+    // Spawn background task to check for updates
     tokio::spawn(async move {
         if let Err(e) = check_and_download().await {
             tracing::debug!("Update check failed: {}", e);
@@ -263,8 +216,6 @@ pub fn check_for_updates_background() {
 
 /// Perform the actual update check and download
 async fn check_and_download() -> Result<()> {
-    record_check();
-
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()?;
