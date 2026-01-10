@@ -100,11 +100,16 @@ fn get_download_url(version: &str) -> String {
 }
 
 /// Download and stage new binary
-async fn download_update(client: &reqwest::Client, version: &str) -> Result<()> {
+async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()> {
     let url = get_download_url(version);
     tracing::debug!("Downloading update from {}", url);
 
-    let resp = client
+    // Use a separate client with longer timeout for downloads
+    let download_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()?;
+
+    let resp = download_client
         .get(&url)
         .header("User-Agent", "grove-cli")
         .send()
