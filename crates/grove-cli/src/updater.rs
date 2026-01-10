@@ -79,18 +79,34 @@ fn is_newer(a: &str, b: &str) -> bool {
 /// Get latest release version from GitHub
 async fn get_latest_version(client: &reqwest::Client) -> Result<String> {
     let url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
-    let resp: serde_json::Value = client
+    let resp = match client
         .get(&url)
         .header("User-Agent", "grove-cli")
         .send()
-        .await?
-        .json()
-        .await?;
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            log(&format!("ERROR: GitHub API request failed: {}", e));
+            anyhow::bail!("GitHub API request failed: {}", e);
+        }
+    };
 
-    resp.get("tag_name")
+    let json: serde_json::Value = match resp.json().await {
+        Ok(j) => j,
+        Err(e) => {
+            log(&format!("ERROR: Failed to parse GitHub API response: {}", e));
+            anyhow::bail!("Failed to parse GitHub API response: {}", e);
+        }
+    };
+
+    json.get("tag_name")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .ok_or_else(|| anyhow::anyhow!("No tag_name in release"))
+        .ok_or_else(|| {
+            log("ERROR: No tag_name in GitHub release response");
+            anyhow::anyhow!("No tag_name in release")
+        })
 }
 
 /// Get download URL for current platform
@@ -127,44 +143,89 @@ async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()>
         .timeout(Duration::from_secs(120))
         .build()?;
 
-    let resp = download_client
+    let resp = match download_client
         .get(&url)
         .header("User-Agent", "grove-cli")
         .send()
-        .await?;
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            log(&format!("ERROR: HTTP request failed: {}", e));
+            anyhow::bail!("HTTP request failed: {}", e);
+        }
+    };
 
     if !resp.status().is_success() {
+        log(&format!("ERROR: Download failed with HTTP {}", resp.status()));
         anyhow::bail!("Download failed: HTTP {}", resp.status());
     }
 
-    let bytes = resp.bytes().await?;
+    let bytes = match resp.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            log(&format!("ERROR: Failed to read response bytes: {}", e));
+            anyhow::bail!("Failed to read response bytes: {}", e);
+        }
+    };
 
     // Extract tarball to temp location
     let tmp_dir = std::env::temp_dir().join(format!("grove-update-{}", std::process::id()));
-    fs::create_dir_all(&tmp_dir)?;
+    if let Err(e) = fs::create_dir_all(&tmp_dir) {
+        log(&format!("ERROR: Failed to create temp dir {:?}: {}", tmp_dir, e));
+        anyhow::bail!("Failed to create temp dir: {}", e);
+    }
 
     let tar_path = tmp_dir.join("grove.tar.gz");
-    fs::write(&tar_path, &bytes)?;
+    if let Err(e) = fs::write(&tar_path, &bytes) {
+        log(&format!("ERROR: Failed to write tarball to {:?}: {}", tar_path, e));
+        let _ = fs::remove_dir_all(&tmp_dir);
+        anyhow::bail!("Failed to write tarball: {}", e);
+    }
 
     // Extract using tar command
-    let output = std::process::Command::new("tar")
+    let output = match std::process::Command::new("tar")
         .args(["-xzf", tar_path.to_str().unwrap(), "-C", tmp_dir.to_str().unwrap()])
-        .output()?;
+        .output()
+    {
+        Ok(o) => o,
+        Err(e) => {
+            log(&format!("ERROR: Failed to run tar command: {}", e));
+            let _ = fs::remove_dir_all(&tmp_dir);
+            anyhow::bail!("Failed to run tar command: {}", e);
+        }
+    };
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log(&format!("ERROR: tar extraction failed: {}", stderr));
         let _ = fs::remove_dir_all(&tmp_dir);
-        anyhow::bail!("Failed to extract tarball");
+        anyhow::bail!("Failed to extract tarball: {}", stderr);
     }
 
     // Move extracted binary to staged location
     let extracted = tmp_dir.join("grove");
     let staged = staged_binary_path();
 
-    if let Some(parent) = staged.parent() {
-        fs::create_dir_all(parent)?;
+    if !extracted.exists() {
+        log(&format!("ERROR: Extracted binary not found at {:?}", extracted));
+        let _ = fs::remove_dir_all(&tmp_dir);
+        anyhow::bail!("Extracted binary not found");
     }
 
-    fs::copy(&extracted, &staged)?;
+    if let Some(parent) = staged.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            log(&format!("ERROR: Failed to create staging dir {:?}: {}", parent, e));
+            let _ = fs::remove_dir_all(&tmp_dir);
+            anyhow::bail!("Failed to create staging dir: {}", e);
+        }
+    }
+
+    if let Err(e) = fs::copy(&extracted, &staged) {
+        log(&format!("ERROR: Failed to copy binary to staged location: {}", e));
+        let _ = fs::remove_dir_all(&tmp_dir);
+        anyhow::bail!("Failed to stage binary: {}", e);
+    }
 
     // Cleanup temp dir
     let _ = fs::remove_dir_all(&tmp_dir);
@@ -173,9 +234,20 @@ async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()>
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&staged)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&staged, perms)?;
+        match fs::metadata(&staged) {
+            Ok(meta) => {
+                let mut perms = meta.permissions();
+                perms.set_mode(0o755);
+                if let Err(e) = fs::set_permissions(&staged, perms) {
+                    log(&format!("ERROR: Failed to set executable permissions: {}", e));
+                    anyhow::bail!("Failed to set executable permissions: {}", e);
+                }
+            }
+            Err(e) => {
+                log(&format!("ERROR: Failed to get staged binary metadata: {}", e));
+                anyhow::bail!("Failed to get staged binary metadata: {}", e);
+            }
+        }
     }
 
     log(&format!("Update {} staged, will apply on next run", version));
@@ -189,18 +261,33 @@ pub fn apply_staged_update() -> Result<bool> {
         return Ok(false);
     }
 
-    let current = std::env::current_exe()?;
+    log("Applying staged update...");
+
+    let current = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(e) => {
+            log(&format!("ERROR: Failed to get current exe path: {}", e));
+            anyhow::bail!("Failed to get current exe path: {}", e);
+        }
+    };
     // Resolve symlinks to get actual binary path
     let current = current.canonicalize().unwrap_or(current);
+    log(&format!("Current binary: {:?}", current));
 
     // Backup current binary (in same dir to avoid cross-device issues)
     let backup = current.with_extension("old");
     if backup.exists() {
-        fs::remove_file(&backup)?;
+        if let Err(e) = fs::remove_file(&backup) {
+            log(&format!("ERROR: Failed to remove old backup: {}", e));
+            anyhow::bail!("Failed to remove old backup: {}", e);
+        }
     }
 
     // Move current -> backup
-    fs::rename(&current, &backup)?;
+    if let Err(e) = fs::rename(&current, &backup) {
+        log(&format!("ERROR: Failed to backup current binary: {}", e));
+        anyhow::bail!("Failed to backup current binary: {}", e);
+    }
 
     // Copy staged -> current (copy works cross-device, rename doesn't)
     match fs::copy(&staged, &current) {
@@ -209,9 +296,22 @@ pub fn apply_staged_update() -> Result<bool> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&current)?.permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&current, perms)?;
+                match fs::metadata(&current) {
+                    Ok(meta) => {
+                        let mut perms = meta.permissions();
+                        perms.set_mode(0o755);
+                        if let Err(e) = fs::set_permissions(&current, perms) {
+                            log(&format!("ERROR: Failed to set permissions after update: {}", e));
+                            let _ = fs::rename(&backup, &current);
+                            anyhow::bail!("Failed to set permissions: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        log(&format!("ERROR: Failed to get metadata after update: {}", e));
+                        let _ = fs::rename(&backup, &current);
+                        anyhow::bail!("Failed to get metadata: {}", e);
+                    }
+                }
             }
 
             // Remove backup and staged on success
@@ -221,6 +321,7 @@ pub fn apply_staged_update() -> Result<bool> {
             Ok(true)
         }
         Err(e) => {
+            log(&format!("ERROR: Failed to copy staged binary: {}", e));
             // Restore backup on failure
             let _ = fs::rename(&backup, &current);
             Err(e.into())
@@ -253,11 +354,24 @@ pub fn check_for_updates_background() -> bool {
 
 /// Perform the actual update check and download
 async fn check_and_download() -> Result<()> {
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
-        .build()?;
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            log(&format!("ERROR: Failed to create HTTP client: {}", e));
+            anyhow::bail!("Failed to create HTTP client: {}", e);
+        }
+    };
 
-    let latest = get_latest_version(&client).await?;
+    let latest = match get_latest_version(&client).await {
+        Ok(v) => v,
+        Err(e) => {
+            log(&format!("ERROR: Failed to get latest version: {}", e));
+            return Err(e);
+        }
+    };
     let current = current_version();
 
     log(&format!("Version check: current={}, latest={}", current, latest));
