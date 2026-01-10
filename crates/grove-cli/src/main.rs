@@ -18,7 +18,7 @@ use tokio::time::sleep;
 #[command(name = "grove", version, about)]
 struct Cli {
     /// Server port
-    #[arg(short, long, default_value = "3000", env = "GROVE_PORT")]
+    #[arg(short, long, default_value = "7777", env = "GROVE_PORT")]
     port: u16,
 
     #[command(subcommand)]
