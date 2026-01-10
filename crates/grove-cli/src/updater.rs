@@ -206,17 +206,17 @@ pub fn apply_staged_update() -> Result<bool> {
 }
 
 /// Check for updates and download in background (non-blocking)
-pub fn check_for_updates_background() {
+/// Returns true if an update was applied (caller should notify user)
+pub fn check_for_updates_background() -> bool {
     // First, apply any staged update
-    match apply_staged_update() {
-        Ok(true) => {
-            eprintln!("\x1b[32minfo\x1b[0m: grove updated! Restart to use new version.");
-        }
-        Ok(false) => {}
+    let updated = match apply_staged_update() {
+        Ok(true) => true,
+        Ok(false) => false,
         Err(e) => {
             tracing::debug!("Failed to apply staged update: {}", e);
+            false
         }
-    }
+    };
 
     // Spawn background task to check for updates
     tokio::spawn(async move {
@@ -224,6 +224,8 @@ pub fn check_for_updates_background() {
             tracing::debug!("Update check failed: {}", e);
         }
     });
+
+    updated
 }
 
 /// Perform the actual update check and download

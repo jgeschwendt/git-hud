@@ -86,8 +86,10 @@ async fn main() -> Result<()> {
     match cli.command {
         // No subcommand → launch interactive TUI
         None => {
-            // Check for updates in background
-            updater::check_for_updates_background();
+            // Check for updates in background (print before TUI takes over terminal)
+            if updater::check_for_updates_background() {
+                eprintln!("\x1b[32minfo\x1b[0m: grove updated to latest version!");
+            }
 
             // Ensure server is running
             let port = ensure_server_running(cli.port, &config, &db).await?;
@@ -122,7 +124,9 @@ async fn main() -> Result<()> {
 
         Some(Commands::Server) => {
             // Check for updates in background
-            updater::check_for_updates_background();
+            if updater::check_for_updates_background() {
+                eprintln!("\x1b[32minfo\x1b[0m: grove updated to latest version!");
+            }
 
             // Run server in foreground
             run_server(cli.port, config, db).await?;
