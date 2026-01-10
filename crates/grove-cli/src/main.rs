@@ -2,6 +2,8 @@
 //!
 //! See README.md for command documentation and flow diagrams.
 
+mod updater;
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use grove_api::Server;
@@ -84,6 +86,9 @@ async fn main() -> Result<()> {
     match cli.command {
         // No subcommand → launch interactive TUI
         None => {
+            // Check for updates in background
+            updater::check_for_updates_background();
+
             // Ensure server is running
             let port = ensure_server_running(cli.port, &config, &db).await?;
 
@@ -116,6 +121,9 @@ async fn main() -> Result<()> {
         }
 
         Some(Commands::Server) => {
+            // Check for updates in background
+            updater::check_for_updates_background();
+
             // Run server in foreground
             run_server(cli.port, config, db).await?;
         }
