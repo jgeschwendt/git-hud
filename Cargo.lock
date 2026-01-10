@@ -1804,6 +1804,7 @@ name = "grove-cli"
 version = "0.2.6"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "crossterm",
  "futures-util",

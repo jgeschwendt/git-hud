@@ -1,13 +1,31 @@
 //! Auto-update functionality
 //!
 //! Checks for updates when running `grove` or `grove server`.
+//! Logs to ~/.grove/data/updater.log
 
 use anyhow::Result;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
 const REPO: &str = "jgeschwendt/grove";
+
+/// Log a message to the updater log file
+fn log(msg: &str) {
+    let log_path = grove_home().join("data").join("updater.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{}] {}", timestamp, msg);
+    }
+}
 
 /// Get the grove home directory (~/.grove)
 fn grove_home() -> PathBuf {
@@ -102,6 +120,7 @@ fn get_download_url(version: &str) -> String {
 /// Download and stage new binary
 async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()> {
     let url = get_download_url(version);
+    log(&format!("Downloading update from {}", url));
 
     // Use a separate client with longer timeout for downloads
     let download_client = reqwest::Client::builder()
@@ -159,7 +178,7 @@ async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()>
         fs::set_permissions(&staged, perms)?;
     }
 
-    // Silently staged - will be applied on next run
+    log(&format!("Update {} staged, will apply on next run", version));
     Ok(())
 }
 
@@ -198,6 +217,7 @@ pub fn apply_staged_update() -> Result<bool> {
             // Remove backup and staged on success
             let _ = fs::remove_file(&backup);
             let _ = fs::remove_file(&staged);
+            log("Update applied successfully");
             Ok(true)
         }
         Err(e) => {
@@ -212,11 +232,20 @@ pub fn apply_staged_update() -> Result<bool> {
 /// Returns true if an update was applied (caller should notify user)
 pub fn check_for_updates_background() -> bool {
     // First, apply any staged update
-    let updated = apply_staged_update().unwrap_or(false);
+    let updated = match apply_staged_update() {
+        Ok(true) => true,
+        Ok(false) => false,
+        Err(e) => {
+            log(&format!("Failed to apply staged update: {}", e));
+            false
+        }
+    };
 
-    // Spawn background task to check for updates (silently)
+    // Spawn background task to check for updates
     tokio::spawn(async move {
-        let _ = check_and_download().await;
+        if let Err(e) = check_and_download().await {
+            log(&format!("Update check failed: {}", e));
+        }
     });
 
     updated
@@ -231,7 +260,10 @@ async fn check_and_download() -> Result<()> {
     let latest = get_latest_version(&client).await?;
     let current = current_version();
 
+    log(&format!("Version check: current={}, latest={}", current, latest));
+
     if is_newer(&latest, current) {
+        log(&format!("New version available: {} -> {}", current, latest));
         download_update(&client, &latest).await?;
     }
 
