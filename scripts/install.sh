@@ -25,7 +25,7 @@ case "$(uname -s)" in
     *)      error "Unsupported OS: $(uname -s)" ;;
 esac
 
-# Detect architecture
+# Detect architecture (normalize to Rust target naming)
 case "$(uname -m)" in
     x86_64)         ARCH="x86_64" ;;
     arm64|aarch64)  ARCH="aarch64" ;;
@@ -47,7 +47,7 @@ fi
 info "Installing grove ${VERSION}..."
 
 # Download
-DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/grove-${NAME}.tar.gz"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${NAME}.tar.gz"
 TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
 
