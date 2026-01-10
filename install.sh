@@ -1,100 +1,74 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.grove"
+# grove installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/jgeschwendt/grove/main/scripts/install.sh | bash
+
 REPO="jgeschwendt/grove"
+INSTALL_DIR="${GROVE_INSTALL_DIR:-/usr/local/bin}"
+VERSION="${1:-latest}"
 
-# Detect platform
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
 
-if [ "$ARCH" = "x86_64" ]; then
-  ARCH="x64"
+info() { echo -e "${GREEN}info${NC}: $1"; }
+warn() { echo -e "${YELLOW}warn${NC}: $1"; }
+error() { echo -e "${RED}error${NC}: $1"; exit 1; }
+
+# Detect OS
+case "$(uname -s)" in
+    Darwin) OS="darwin" ;;
+    Linux)  OS="linux" ;;
+    *)      error "Unsupported OS: $(uname -s)" ;;
+esac
+
+# Detect architecture (normalize to Rust target naming)
+case "$(uname -m)" in
+    x86_64)         ARCH="x86_64" ;;
+    arm64|aarch64)  ARCH="aarch64" ;;
+    *)              error "Unsupported architecture: $(uname -m)" ;;
+esac
+
+NAME="${OS}-${ARCH}"
+info "Detected platform: ${NAME}"
+
+# Get version
+if [[ "$VERSION" == "latest" ]]; then
+    info "Fetching latest version..."
+    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -z "$VERSION" ]]; then
+        error "Failed to fetch latest version"
+    fi
 fi
 
-# Fetch latest version from GitHub
-echo "Fetching latest release..."
-if command -v curl &> /dev/null; then
-  LATEST_JSON=$(curl -fsSL --tlsv1.2 "https://api.github.com/repos/${REPO}/releases/latest")
-elif command -v wget &> /dev/null; then
-  LATEST_JSON=$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest")
+info "Installing grove ${VERSION}..."
+
+# Download
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${NAME}.tar.gz"
+TMP_DIR=$(mktemp -d)
+trap "rm -rf $TMP_DIR" EXIT
+
+info "Downloading from ${DOWNLOAD_URL}"
+if ! curl -fsSL "$DOWNLOAD_URL" -o "${TMP_DIR}/grove.tar.gz"; then
+    error "Download failed. Check that version ${VERSION} exists and has binaries for ${NAME}."
+fi
+
+# Extract
+tar -xzf "${TMP_DIR}/grove.tar.gz" -C "$TMP_DIR"
+
+# Install
+if [[ -w "$INSTALL_DIR" ]]; then
+    mv "${TMP_DIR}/grove" "${INSTALL_DIR}/grove"
 else
-  echo "Error: curl or wget required"
-  exit 1
+    info "Installing to ${INSTALL_DIR} (requires sudo)"
+    sudo mv "${TMP_DIR}/grove" "${INSTALL_DIR}/grove"
 fi
 
-VERSION=$(echo "$LATEST_JSON" | grep '"tag_name"' | grep -o 'v[0-9.]*' | tr -d 'v')
+chmod +x "${INSTALL_DIR}/grove"
 
-if [ -z "$VERSION" ]; then
-  echo "Error: Failed to fetch latest version"
-  exit 1
-fi
-
-PACKAGE_NAME="${OS}-${ARCH}.tar.gz"
-RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${PACKAGE_NAME}"
-
-echo "Installing grove v${VERSION} for ${OS}-${ARCH}..."
-
-# Create directory structure
-mkdir -p "${INSTALL_DIR}/data"
-mkdir -p "${INSTALL_DIR}/clones"
-mkdir -p "${INSTALL_DIR}/logs"
-
-# Download package
-TEMP_DIR=$(mktemp -d)
-echo "Downloading from $RELEASE_URL..."
-if command -v curl &> /dev/null; then
-  curl -fL# --tlsv1.2 "$RELEASE_URL" -o "${TEMP_DIR}/${PACKAGE_NAME}"
-elif command -v wget &> /dev/null; then
-  wget --progress=bar:force -O "${TEMP_DIR}/${PACKAGE_NAME}" "$RELEASE_URL"
-else
-  echo "Error: curl or wget required"
-  exit 1
-fi
-
-# Extract to install directory
-echo "Extracting..."
-tar -xzf "${TEMP_DIR}/${PACKAGE_NAME}" -C "$TEMP_DIR"
-rm -rf "${INSTALL_DIR}/app" 2>/dev/null || true
-mv "${TEMP_DIR}/${OS}-${ARCH}" "${INSTALL_DIR}/app"
-rm -rf "$TEMP_DIR"
-
-# Create symlink in bin
-mkdir -p "${INSTALL_DIR}/bin"
-ln -sf "${INSTALL_DIR}/app/grove" "${INSTALL_DIR}/bin/grove"
-
-# Add to PATH - detect shell config file
-if [ -n "${SHELL:-}" ] && [[ "$SHELL" == *"zsh"* ]]; then
-  # Prefer .zshenv for zsh (sourced for all shells)
-  if [ -f "${HOME}/.zshenv" ]; then
-    SHELL_RC="${HOME}/.zshenv"
-  else
-    SHELL_RC="${HOME}/.zshrc"
-  fi
-elif [ -f "${HOME}/.bash_profile" ]; then
-  SHELL_RC="${HOME}/.bash_profile"
-elif [ -f "${HOME}/.bashrc" ]; then
-  SHELL_RC="${HOME}/.bashrc"
-else
-  # Fallback to .zshrc
-  SHELL_RC="${HOME}/.zshrc"
-fi
-
-if ! grep -q ".grove/bin" "$SHELL_RC" 2>/dev/null; then
-  echo '' >> "$SHELL_RC"
-  echo '# grove' >> "$SHELL_RC"
-  echo 'export PATH="$HOME/.grove/bin:$PATH"' >> "$SHELL_RC"
-  echo "Added to PATH in $SHELL_RC"
-fi
-
+info "Installed grove to ${INSTALL_DIR}/grove"
 echo ""
-echo "✓ Installation complete!"
-echo ""
-echo "Installed version: $VERSION"
-"${INSTALL_DIR}/bin/grove" version
-echo ""
-echo "Start grove:"
-echo "  ${INSTALL_DIR}/bin/grove"
-echo ""
-echo "Or reload your shell and run:"
-echo "  grove"
+echo "Run 'grove --help' to get started"
