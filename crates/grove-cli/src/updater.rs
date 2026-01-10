@@ -167,8 +167,10 @@ pub fn apply_staged_update() -> Result<bool> {
     }
 
     let current = std::env::current_exe()?;
+    // Resolve symlinks to get actual binary path
+    let current = current.canonicalize().unwrap_or(current);
 
-    // Backup current binary
+    // Backup current binary (in same dir to avoid cross-device issues)
     let backup = current.with_extension("old");
     if backup.exists() {
         fs::remove_file(&backup)?;
@@ -177,11 +179,21 @@ pub fn apply_staged_update() -> Result<bool> {
     // Move current -> backup
     fs::rename(&current, &backup)?;
 
-    // Move staged -> current
-    match fs::rename(&staged, &current) {
+    // Copy staged -> current (copy works cross-device, rename doesn't)
+    match fs::copy(&staged, &current) {
         Ok(_) => {
-            // Remove backup on success
+            // Set executable permission
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&current)?.permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&current, perms)?;
+            }
+
+            // Remove backup and staged on success
             let _ = fs::remove_file(&backup);
+            let _ = fs::remove_file(&staged);
             tracing::info!("Update applied successfully");
             Ok(true)
         }
