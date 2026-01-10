@@ -4,9 +4,8 @@
   "description": "Git worktree dashboard with bare repository management",
   "type": "module",
   "scripts": {
-    "build": "bun --bun next build && bash scripts/build.sh",
-    "dev": "bun --bun next dev",
-    "start": "bun run cli/index.tsx"
+    "build": "bun --bun next build",
+    "dev": "bun --bun next dev"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
