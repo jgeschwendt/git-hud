@@ -102,7 +102,6 @@ fn get_download_url(version: &str) -> String {
 /// Download and stage new binary
 async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()> {
     let url = get_download_url(version);
-    tracing::debug!("Downloading update from {}", url);
 
     // Use a separate client with longer timeout for downloads
     let download_client = reqwest::Client::builder()
@@ -160,7 +159,7 @@ async fn download_update(_client: &reqwest::Client, version: &str) -> Result<()>
         fs::set_permissions(&staged, perms)?;
     }
 
-    tracing::info!("Update {} staged at {:?}", version, staged);
+    // Silently staged - will be applied on next run
     Ok(())
 }
 
@@ -199,7 +198,6 @@ pub fn apply_staged_update() -> Result<bool> {
             // Remove backup and staged on success
             let _ = fs::remove_file(&backup);
             let _ = fs::remove_file(&staged);
-            tracing::info!("Update applied successfully");
             Ok(true)
         }
         Err(e) => {
@@ -214,20 +212,11 @@ pub fn apply_staged_update() -> Result<bool> {
 /// Returns true if an update was applied (caller should notify user)
 pub fn check_for_updates_background() -> bool {
     // First, apply any staged update
-    let updated = match apply_staged_update() {
-        Ok(true) => true,
-        Ok(false) => false,
-        Err(e) => {
-            tracing::debug!("Failed to apply staged update: {}", e);
-            false
-        }
-    };
+    let updated = apply_staged_update().unwrap_or(false);
 
-    // Spawn background task to check for updates
+    // Spawn background task to check for updates (silently)
     tokio::spawn(async move {
-        if let Err(e) = check_and_download().await {
-            tracing::debug!("Update check failed: {}", e);
-        }
+        let _ = check_and_download().await;
     });
 
     updated
@@ -242,10 +231,7 @@ async fn check_and_download() -> Result<()> {
     let latest = get_latest_version(&client).await?;
     let current = current_version();
 
-    tracing::debug!("Current: {}, Latest: {}", current, latest);
-
     if is_newer(&latest, current) {
-        tracing::info!("New version available: {} -> {}", current, latest);
         download_update(&client, &latest).await?;
     }
 
