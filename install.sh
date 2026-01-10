@@ -2,10 +2,14 @@
 set -euo pipefail
 
 # grove installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/jgeschwendt/grove/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/jgeschwendt/grove/main/install.sh | bash
+#
+# Installs to ~/.grove/bin by default (no sudo required)
+# Set GROVE_INSTALL_DIR to override
 
 REPO="jgeschwendt/grove"
-INSTALL_DIR="${GROVE_INSTALL_DIR:-/usr/local/bin}"
+GROVE_HOME="${GROVE_HOME:-$HOME/.grove}"
+INSTALL_DIR="${GROVE_INSTALL_DIR:-$GROVE_HOME/bin}"
 VERSION="${1:-latest}"
 
 # Colors
@@ -60,15 +64,21 @@ fi
 tar -xzf "${TMP_DIR}/grove.tar.gz" -C "$TMP_DIR"
 
 # Install
-if [[ -w "$INSTALL_DIR" ]]; then
-    mv "${TMP_DIR}/grove" "${INSTALL_DIR}/grove"
-else
-    info "Installing to ${INSTALL_DIR} (requires sudo)"
-    sudo mv "${TMP_DIR}/grove" "${INSTALL_DIR}/grove"
-fi
-
+mkdir -p "$INSTALL_DIR"
+mv "${TMP_DIR}/grove" "${INSTALL_DIR}/grove"
 chmod +x "${INSTALL_DIR}/grove"
 
 info "Installed grove to ${INSTALL_DIR}/grove"
 echo ""
+
+# Check if in PATH
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    warn "$INSTALL_DIR is not in your PATH"
+    echo ""
+    echo "Add this to your shell profile (~/.zshrc or ~/.bashrc):"
+    echo ""
+    echo "  export PATH=\"\$HOME/.grove/bin:\$PATH\""
+    echo ""
+fi
+
 echo "Run 'grove --help' to get started"
