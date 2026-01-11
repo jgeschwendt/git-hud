@@ -7,6 +7,19 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 
+/// Available slash commands with descriptions
+pub const COMMANDS: &[(&str, &str)] = &[
+    ("/clone", "Clone a repository"),
+    ("/worktree", "Create a new worktree"),
+    ("/delete", "Delete a worktree"),
+    ("/open", "Open in VS Code"),
+    ("/list", "List repositories"),
+    ("/refresh", "Refresh all repositories"),
+    ("/status", "Show server status"),
+    ("/help", "Show available commands"),
+    ("/quit", "Exit grove"),
+];
+
 /// Chat message
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -65,6 +78,10 @@ pub struct ChatApp {
     pub port: u16,
     /// Command sender
     command_tx: mpsc::Sender<Command>,
+    /// Autocomplete selection index
+    pub autocomplete_index: usize,
+    /// Locked autocomplete height (set when autocomplete opens)
+    pub autocomplete_height: Option<usize>,
 }
 
 impl ChatApp {
@@ -74,7 +91,7 @@ impl ChatApp {
 
         let mut input = TextArea::default();
         input.set_cursor_line_style(Style::default());
-        input.set_placeholder_text("Type a message or /help for commands...");
+        input.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
 
         let app = Self {
             messages: vec![Message {
@@ -88,6 +105,8 @@ impl ChatApp {
             server_status: ServerStatus::Running { port },
             port,
             command_tx,
+            autocomplete_index: 0,
+            autocomplete_height: None,
         };
 
         (app, command_rx)
@@ -132,43 +151,78 @@ impl ChatApp {
     /// Handle key event, returns true if should quit
     async fn handle_key(&mut self, key: event::KeyEvent) -> anyhow::Result<bool> {
         match self.mode {
-            Mode::Insert => match (key.code, key.modifiers) {
-                // Submit
-                (KeyCode::Enter, KeyModifiers::NONE) => {
-                    let content: String = self.input.lines().join("\n");
-                    if !content.trim().is_empty() {
-                        self.submit_message(content).await?;
+            Mode::Insert => {
+                let showing_autocomplete = self.show_autocomplete();
+                let filtered_count = if showing_autocomplete {
+                    self.filtered_commands().len()
+                } else {
+                    0
+                };
+
+                match (key.code, key.modifiers) {
+                    // Tab to complete
+                    (KeyCode::Tab, KeyModifiers::NONE) if showing_autocomplete && filtered_count > 0 => {
+                        self.apply_autocomplete();
+                    }
+                    // Navigate autocomplete up
+                    (KeyCode::Up, KeyModifiers::NONE) if showing_autocomplete && filtered_count > 0 => {
+                        if self.autocomplete_index > 0 {
+                            self.autocomplete_index -= 1;
+                        } else {
+                            self.autocomplete_index = filtered_count - 1;
+                        }
+                    }
+                    // Navigate autocomplete down
+                    (KeyCode::Down, KeyModifiers::NONE) if showing_autocomplete && filtered_count > 0 => {
+                        if self.autocomplete_index < filtered_count - 1 {
+                            self.autocomplete_index += 1;
+                        } else {
+                            self.autocomplete_index = 0;
+                        }
+                    }
+                    // Submit
+                    (KeyCode::Enter, KeyModifiers::NONE) => {
+                        let content: String = self.input.lines().join("\n");
+                        if !content.trim().is_empty() {
+                            self.submit_message(content).await?;
+                        }
+                    }
+                    // Multi-line
+                    (KeyCode::Enter, KeyModifiers::SHIFT) => {
+                        self.input.insert_newline();
+                    }
+                    // Clear or switch mode
+                    (KeyCode::Esc, _) => {
+                        if self.input.is_empty() {
+                            self.mode = Mode::Normal;
+                        } else {
+                            self.input.select_all();
+                            self.input.cut();
+                        }
+                        self.autocomplete_index = 0;
+                        self.autocomplete_height = None;
+                    }
+                    // Quit
+                    (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                        return Ok(true);
+                    }
+                    // Scroll (half page)
+                    (KeyCode::Up, KeyModifiers::CONTROL) | (KeyCode::PageUp, _) => {
+                        self.scroll_up(15);
+                    }
+                    (KeyCode::Down, KeyModifiers::CONTROL) | (KeyCode::PageDown, _) => {
+                        self.scroll_down(15);
+                    }
+                    // Pass to textarea
+                    _ => {
+                        self.input.input(key);
+                        // Reset autocomplete index when typing
+                        self.autocomplete_index = 0;
+                        // Update autocomplete state
+                        self.update_autocomplete_state();
                     }
                 }
-                // Multi-line
-                (KeyCode::Enter, KeyModifiers::SHIFT) => {
-                    self.input.insert_newline();
-                }
-                // Clear or switch mode
-                (KeyCode::Esc, _) => {
-                    if self.input.is_empty() {
-                        self.mode = Mode::Normal;
-                    } else {
-                        self.input.select_all();
-                        self.input.cut();
-                    }
-                }
-                // Quit
-                (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                    return Ok(true);
-                }
-                // Scroll
-                (KeyCode::Up, KeyModifiers::CONTROL) | (KeyCode::PageUp, _) => {
-                    self.scroll_up(10);
-                }
-                (KeyCode::Down, KeyModifiers::CONTROL) | (KeyCode::PageDown, _) => {
-                    self.scroll_down(10);
-                }
-                // Pass to textarea
-                _ => {
-                    self.input.input(key);
-                }
-            },
+            }
             Mode::Normal => match key.code {
                 KeyCode::Char('i') => self.mode = Mode::Insert,
                 KeyCode::Char('q') => return Ok(true),
@@ -287,25 +341,84 @@ Navigation:
     /// Handle mouse event
     fn handle_mouse(&mut self, mouse: event::MouseEvent) {
         match mouse.kind {
-            MouseEventKind::ScrollUp => self.scroll_up(3),
-            MouseEventKind::ScrollDown => self.scroll_down(3),
+            MouseEventKind::ScrollUp => self.scroll_up(2),
+            MouseEventKind::ScrollDown => self.scroll_down(2),
             _ => {}
         }
     }
 
     fn scroll_up(&mut self, n: usize) {
+        // Increase offset from bottom (shows older content)
         self.scroll_offset = self.scroll_offset.saturating_add(n);
     }
 
     fn scroll_down(&mut self, n: usize) {
+        // Decrease offset from bottom (shows newer content)
         self.scroll_offset = self.scroll_offset.saturating_sub(n);
     }
 
     fn scroll_to_top(&mut self) {
-        self.scroll_offset = usize::MAX;
+        // Large value will be clamped in render
+        self.scroll_offset = usize::MAX / 2;
     }
 
     fn scroll_to_bottom(&mut self) {
         self.scroll_offset = 0;
+    }
+
+    /// Get current input text
+    pub fn input_text(&self) -> String {
+        self.input.lines().join("\n")
+    }
+
+    /// Check if autocomplete should be shown
+    pub fn show_autocomplete(&self) -> bool {
+        let text = self.input_text();
+        text.starts_with('/') && !text.contains(' ')
+    }
+
+    /// Get filtered commands matching current input
+    pub fn filtered_commands(&self) -> Vec<(&'static str, &'static str)> {
+        let text = self.input_text();
+        if !text.starts_with('/') {
+            return vec![];
+        }
+        COMMANDS
+            .iter()
+            .filter(|(cmd, _)| cmd.starts_with(&text))
+            .copied()
+            .collect()
+    }
+
+    /// Apply autocomplete selection
+    fn apply_autocomplete(&mut self) {
+        let filtered = self.filtered_commands();
+        if let Some((cmd, _)) = filtered.get(self.autocomplete_index) {
+            self.input.select_all();
+            self.input.cut();
+            self.input.insert_str(cmd);
+            self.input.insert_char(' ');
+            self.autocomplete_index = 0;
+            self.autocomplete_height = None; // Close autocomplete
+        }
+    }
+
+    /// Update autocomplete height state
+    pub fn update_autocomplete_state(&mut self) {
+        if self.show_autocomplete() {
+            // Lock height when first showing autocomplete
+            if self.autocomplete_height.is_none() {
+                let count = self.filtered_commands().len();
+                self.autocomplete_height = Some(count.min(6));
+            }
+        } else {
+            // Reset when autocomplete closes
+            self.autocomplete_height = None;
+        }
+    }
+
+    /// Get the display height for autocomplete
+    pub fn get_autocomplete_display_height(&self) -> usize {
+        self.autocomplete_height.unwrap_or(0)
     }
 }
