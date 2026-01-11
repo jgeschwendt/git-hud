@@ -9,14 +9,11 @@ use tui_textarea::TextArea;
 /// Available slash commands with descriptions
 pub const COMMANDS: &[(&str, &str)] = &[
     ("/clone", "Clone a repository"),
-    ("/worktree", "Create a new worktree"),
-    ("/delete", "Delete a worktree"),
-    ("/open", "Open in VS Code"),
     ("/list", "List repositories"),
-    ("/refresh", "Refresh all repositories"),
-    ("/status", "Show server status"),
+    ("/harvest", "Refresh all repositories"),
     ("/help", "Show available commands"),
-    ("/quit", "Exit grove"),
+    ("/grow", "Create a new worktree"),
+    ("/exit", "Exit grove"),
 ];
 
 /// Chat message
@@ -335,13 +332,10 @@ impl ChatApp {
                     role: Role::System,
                     content: r#"Commands:
   /clone <url>           Clone a repository
-  /worktree <branch>     Create worktree
-  /delete <path>         Delete a worktree
-  /open <path>           Open in VS Code
   /list                  List repositories
-  /refresh               Refresh all
-  /status                Show server status
-  /quit, /q              Exit grove
+  /harvest               Refresh all
+  /grow <branch>         Create worktree
+  /exit                  Exit grove
 
 Navigation:
   Ctrl+↑/↓, PgUp/PgDn    Scroll
@@ -367,21 +361,36 @@ Navigation:
                     });
                 }
             }
-            "/status" => {
-                let status = match &self.server_status {
-                    ServerStatus::Starting => "Server starting...".to_string(),
-                    ServerStatus::Running { port } => {
-                        format!("Server running on http://localhost:{}", port)
-                    }
-                    ServerStatus::Error(e) => format!("Server error: {}", e),
-                };
+            "/list" => {
                 self.messages.push(Message {
                     role: Role::System,
-                    content: status,
+                    content: "Listing repositories...".to_string(),
                     timestamp: Local::now(),
                 });
             }
-            "/quit" | "/q" => {
+            "/harvest" => {
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: "Refreshing all repositories...".to_string(),
+                    timestamp: Local::now(),
+                });
+            }
+            "/grow" => {
+                if let Some(branch) = parts.get(1) {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: format!("Creating worktree for {}...", branch),
+                        timestamp: Local::now(),
+                    });
+                } else {
+                    self.messages.push(Message {
+                        role: Role::System,
+                        content: "Usage: /grow <branch>".to_string(),
+                        timestamp: Local::now(),
+                    });
+                }
+            }
+            "/exit" => {
                 self.command_tx.send(Command::Quit).await?;
             }
             _ => {
@@ -432,7 +441,7 @@ Navigation:
     /// Check if autocomplete should be shown
     pub fn show_autocomplete(&self) -> bool {
         let text = self.input_text();
-        text.starts_with('/') && !text.contains(' ')
+        text.starts_with('/') && !text.contains(' ') && !self.filtered_commands().is_empty()
     }
 
     /// Get filtered commands matching current input
