@@ -3,7 +3,6 @@
 use chrono::{DateTime, Local};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers, MouseEventKind};
 use ratatui::prelude::*;
-use std::time::Duration;
 use tokio::sync::mpsc;
 use tui_textarea::TextArea;
 
@@ -82,6 +81,10 @@ pub struct ChatApp {
     pub autocomplete_index: usize,
     /// Locked autocomplete height (set when autocomplete opens)
     pub autocomplete_height: Option<usize>,
+    /// Receiver for system messages (e.g., from updater)
+    system_rx: Option<mpsc::Receiver<String>>,
+    /// Index of the update status message (to update in place)
+    update_message_index: Option<usize>,
 }
 
 impl ChatApp {
@@ -107,9 +110,16 @@ impl ChatApp {
             command_tx,
             autocomplete_index: 0,
             autocomplete_height: None,
+            system_rx: None,
+            update_message_index: None,
         };
 
         (app, command_rx)
+    }
+
+    /// Set the system message receiver (for update status, etc.)
+    pub fn set_system_receiver(&mut self, rx: mpsc::Receiver<String>) {
+        self.system_rx = Some(rx);
     }
 
     /// Run the TUI event loop
@@ -126,26 +136,74 @@ impl ChatApp {
     }
 
     async fn event_loop(&mut self, terminal: &mut Terminal<impl Backend>) -> anyhow::Result<()> {
+        let mut event_stream = crossterm::event::EventStream::new();
+        use futures::StreamExt;
+
         loop {
             // Draw UI
             terminal.draw(|frame| crate::ui::render(frame, self))?;
 
-            // Poll for events (50ms timeout)
-            if event::poll(Duration::from_millis(50))? {
-                match event::read()? {
-                    Event::Key(key) => {
-                        if self.handle_key(key).await? {
-                            break; // Quit signal
+            // Wait for either terminal event or system message
+            tokio::select! {
+                // Terminal events
+                maybe_event = event_stream.next() => {
+                    if let Some(Ok(event)) = maybe_event {
+                        match event {
+                            Event::Key(key) => {
+                                if self.handle_key(key).await? {
+                                    break;
+                                }
+                            }
+                            Event::Mouse(mouse) => {
+                                self.handle_mouse(mouse);
+                            }
+                            _ => {}
                         }
                     }
-                    Event::Mouse(mouse) => {
-                        self.handle_mouse(mouse);
+                }
+                // System messages (from updater, etc.)
+                Some(msg) = async {
+                    if let Some(ref mut rx) = self.system_rx {
+                        rx.recv().await
+                    } else {
+                        std::future::pending::<Option<String>>().await
                     }
-                    _ => {}
+                } => {
+                    self.handle_system_message(msg);
                 }
             }
         }
         Ok(())
+    }
+
+    /// Handle a system message (e.g., from updater)
+    fn handle_system_message(&mut self, msg: String) {
+        // Check if this is an update message that should replace the previous one
+        if msg.starts_with("⟳") || msg.starts_with("✓") {
+            if let Some(idx) = self.update_message_index {
+                // Update existing message
+                if idx < self.messages.len() {
+                    self.messages[idx].content = msg;
+                    self.messages[idx].timestamp = Local::now();
+                }
+            } else {
+                // Add new message and track its index
+                self.update_message_index = Some(self.messages.len());
+                self.messages.push(Message {
+                    role: Role::System,
+                    content: msg,
+                    timestamp: Local::now(),
+                });
+            }
+        } else {
+            // Regular system message
+            self.messages.push(Message {
+                role: Role::System,
+                content: msg,
+                timestamp: Local::now(),
+            });
+        }
+        self.scroll_to_bottom();
     }
 
     /// Handle key event, returns true if should quit

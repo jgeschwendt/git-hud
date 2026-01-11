@@ -8,8 +8,24 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::sync::mpsc;
 
 const REPO: &str = "jgeschwendt/grove";
+
+/// Update status messages sent to the TUI
+#[derive(Debug, Clone)]
+pub enum UpdateStatus {
+    /// Checking for updates
+    Checking,
+    /// Downloading a new version
+    Downloading(String),
+    /// Update ready, will apply on restart
+    Ready(String),
+    /// Already up to date
+    UpToDate,
+    /// Update was just applied
+    Applied(String),
+}
 
 /// Log a message to the updater log file
 fn log(msg: &str) {
@@ -330,8 +346,11 @@ pub fn apply_staged_update() -> Result<bool> {
 }
 
 /// Check for updates and download in background (non-blocking)
-/// Returns true if an update was applied (caller should notify user)
-pub fn check_for_updates_background() -> bool {
+/// Returns (applied, receiver) - applied is true if an update was just applied,
+/// receiver gets status updates from the background check
+pub fn check_for_updates_background() -> (bool, mpsc::Receiver<UpdateStatus>) {
+    let (tx, rx) = mpsc::channel(16);
+
     // First, apply any staged update
     let updated = match apply_staged_update() {
         Ok(true) => true,
@@ -347,21 +366,27 @@ pub fn check_for_updates_background() -> bool {
     // re-download the same version. Next run will be the new binary.
     if updated {
         log("Skipping update check - just applied staged update");
-        return true;
+        let tx_clone = tx.clone();
+        tokio::spawn(async move {
+            let _ = tx_clone.send(UpdateStatus::Applied(current_version().to_string())).await;
+        });
+        return (true, rx);
     }
 
     // Spawn background task to check for updates
     tokio::spawn(async move {
-        if let Err(e) = check_and_download().await {
+        if let Err(e) = check_and_download_with_status(tx).await {
             log(&format!("Update check failed: {}", e));
         }
     });
 
-    updated
+    (false, rx)
 }
 
-/// Perform the actual update check and download
-async fn check_and_download() -> Result<()> {
+/// Perform the actual update check and download, sending status updates
+async fn check_and_download_with_status(tx: mpsc::Sender<UpdateStatus>) -> Result<()> {
+    let _ = tx.send(UpdateStatus::Checking).await;
+
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
@@ -386,8 +411,13 @@ async fn check_and_download() -> Result<()> {
 
     if is_newer(&latest, current) {
         log(&format!("New version available: {} -> {}", current, latest));
+        let _ = tx.send(UpdateStatus::Downloading(latest.clone())).await;
         download_update(&client, &latest).await?;
+        let _ = tx.send(UpdateStatus::Ready(latest)).await;
+    } else {
+        let _ = tx.send(UpdateStatus::UpToDate).await;
     }
 
     Ok(())
 }
+

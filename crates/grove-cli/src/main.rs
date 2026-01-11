@@ -86,16 +86,14 @@ async fn main() -> Result<()> {
     match cli.command {
         // No subcommand → launch interactive TUI
         None => {
-            // Check for updates in background (print before TUI takes over terminal)
-            if updater::check_for_updates_background() {
-                eprintln!("\x1b[32minfo\x1b[0m: grove updated to latest version!");
-            }
+            // Check for updates in background
+            let (applied, update_rx) = updater::check_for_updates_background();
 
             // Ensure server is running
             let port = ensure_server_running(cli.port, &config, &db).await?;
 
-            // Launch TUI
-            run_tui(port).await?;
+            // Launch TUI with update channel
+            run_tui(port, applied, update_rx).await?;
         }
 
         // Single commands
@@ -123,8 +121,9 @@ async fn main() -> Result<()> {
         }
 
         Some(Commands::Server) => {
-            // Check for updates in background
-            if updater::check_for_updates_background() {
+            // Check for updates in background (ignore receiver for headless mode)
+            let (applied, _) = updater::check_for_updates_background();
+            if applied {
                 eprintln!("\x1b[32minfo\x1b[0m: grove updated to latest version!");
             }
 
@@ -186,13 +185,45 @@ fn is_server_running(port: u16) -> bool {
 }
 
 /// Run the TUI chat interface
-async fn run_tui(port: u16) -> Result<()> {
+async fn run_tui(
+    port: u16,
+    update_applied: bool,
+    mut update_rx: tokio::sync::mpsc::Receiver<updater::UpdateStatus>,
+) -> Result<()> {
     // Setup terminal
     let mut terminal = ratatui::init();
     terminal.clear()?;
 
     // Create app
     let (mut app, mut command_rx) = ChatApp::new(port);
+
+    // Create channel for system messages to the TUI
+    let (system_tx, system_rx) = tokio::sync::mpsc::channel::<String>(16);
+    app.set_system_receiver(system_rx);
+
+    // If update was just applied, send message
+    if update_applied {
+        let _ = system_tx
+            .send(format!("✓ Updated to v{}", updater::current_version()))
+            .await;
+    }
+
+    // Spawn task to convert UpdateStatus to system messages
+    let system_tx_clone = system_tx.clone();
+    tokio::spawn(async move {
+        while let Some(status) = update_rx.recv().await {
+            let msg = match status {
+                updater::UpdateStatus::Checking => continue, // Don't show checking message
+                updater::UpdateStatus::Downloading(v) => format!("⟳ Downloading {}...", v),
+                updater::UpdateStatus::Ready(v) => {
+                    format!("✓ {} ready — restart to update", v)
+                }
+                updater::UpdateStatus::UpToDate => continue, // Don't show up-to-date
+                updater::UpdateStatus::Applied(v) => format!("✓ Updated to {}", v),
+            };
+            let _ = system_tx_clone.send(msg).await;
+        }
+    });
 
     // Spawn command handler
     let handle = tokio::spawn(async move {
