@@ -226,25 +226,147 @@ async fn run_tui(
     });
 
     // Spawn command handler
+    let system_tx_cmd = system_tx.clone();
     let handle = tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let base_url = format!("http://localhost:{}", port);
+
         while let Some(cmd) = command_rx.recv().await {
             match cmd {
                 Command::Quit => break,
                 Command::Clone(url) => {
-                    // TODO: Call API
-                    eprintln!("Clone: {}", url);
+                    let _ = system_tx_cmd.send(format!("Cloning {}...", url)).await;
+                    match client
+                        .post(format!("{}/api/clone", base_url))
+                        .json(&serde_json::json!({ "url": url }))
+                        .send()
+                        .await
+                    {
+                        Ok(resp) if resp.status().is_success() => {
+                            let _ = system_tx_cmd.send("Clone started".to_string()).await;
+                        }
+                        Ok(resp) => {
+                            let error = resp.text().await.unwrap_or_default();
+                            let _ = system_tx_cmd.send(format!("Clone failed: {}", error)).await;
+                        }
+                        Err(e) => {
+                            let _ = system_tx_cmd.send(format!("Clone error: {}", e)).await;
+                        }
+                    }
                 }
-                Command::CreateWorktree { repo_id, branch } => {
-                    eprintln!("Worktree: {} {}", repo_id, branch);
+                Command::List => {
+                    match client.get(format!("{}/api/state", base_url)).send().await {
+                        Ok(resp) if resp.status().is_success() => {
+                            if let Ok(state) = resp.json::<serde_json::Value>().await {
+                                let mut output = String::new();
+                                if let Some(repos) = state.get("repositories").and_then(|v| v.as_array()) {
+                                    if repos.is_empty() {
+                                        output.push_str("No repositories. Use /clone <url> to add one.");
+                                    } else {
+                                        for repo in repos {
+                                            let name = repo.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                            let url = repo.get("clone_url").and_then(|v| v.as_str()).unwrap_or("");
+                                            output.push_str(&format!("{} - {}\n", name, url));
+                                            if let Some(worktrees) = repo.get("worktrees").and_then(|v| v.as_array()) {
+                                                for (i, wt) in worktrees.iter().enumerate() {
+                                                    let branch = wt.get("branch").and_then(|v| v.as_str()).unwrap_or("");
+                                                    let path = wt.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                                                    let marker = if i == 0 { "●" } else { "○" };
+                                                    output.push_str(&format!("  {} {} ({})\n", marker, branch, path));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                let _ = system_tx_cmd.send(output.trim_end().to_string()).await;
+                            }
+                        }
+                        _ => {
+                            let _ = system_tx_cmd.send("Failed to list repositories".to_string()).await;
+                        }
+                    }
                 }
-                Command::DeleteWorktree { path } => {
-                    eprintln!("Delete: {}", path);
+                Command::Harvest(file) => {
+                    let _ = system_tx_cmd.send(format!("Exporting to {}...", file)).await;
+                    match client.get(format!("{}/api/state", base_url)).send().await {
+                        Ok(resp) if resp.status().is_success() => {
+                            if let Ok(state) = resp.json::<serde_json::Value>().await {
+                                let mut lines = Vec::new();
+                                if let Some(repos) = state.get("repositories").and_then(|v| v.as_array()) {
+                                    for repo in repos {
+                                        let url = repo.get("clone_url").and_then(|v| v.as_str()).unwrap_or("");
+                                        let branches: Vec<String> = repo
+                                            .get("worktrees")
+                                            .and_then(|v| v.as_array())
+                                            .map(|wts| {
+                                                wts.iter()
+                                                    .filter_map(|wt| {
+                                                        let path = wt.get("path").and_then(|v| v.as_str())?;
+                                                        if path.ends_with("/.main") {
+                                                            None
+                                                        } else {
+                                                            wt.get("branch").and_then(|v| v.as_str()).map(String::from)
+                                                        }
+                                                    })
+                                                    .collect()
+                                            })
+                                            .unwrap_or_default();
+                                        let entry = serde_json::json!({
+                                            "url": url,
+                                            "worktrees": branches
+                                        });
+                                        lines.push(serde_json::to_string(&entry).unwrap_or_default());
+                                    }
+                                    match std::fs::write(&file, lines.join("\n") + "\n") {
+                                        Ok(_) => {
+                                            let _ = system_tx_cmd.send(format!("Exported {} repos to {}", lines.len(), file)).await;
+                                        }
+                                        Err(e) => {
+                                            let _ = system_tx_cmd.send(format!("Failed to write file: {}", e)).await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            let _ = system_tx_cmd.send("Failed to export repositories".to_string()).await;
+                        }
+                    }
                 }
-                Command::Open(path) => {
-                    let _ = std::process::Command::new("code").arg(&path).spawn();
-                }
-                Command::Refresh(id) => {
-                    eprintln!("Refresh: {}", id);
+                Command::Grow(file) => {
+                    let _ = system_tx_cmd.send(format!("Importing from {}...", file)).await;
+                    match std::fs::read_to_string(&file) {
+                        Ok(content) => {
+                            let entries: Vec<serde_json::Value> = content
+                                .lines()
+                                .filter(|line| !line.trim().is_empty())
+                                .filter_map(|line| serde_json::from_str(line).ok())
+                                .collect();
+
+                            if entries.is_empty() {
+                                let _ = system_tx_cmd.send("No entries in seed file".to_string()).await;
+                                continue;
+                            }
+
+                            let _ = system_tx_cmd.send(format!("Importing {} repositories...", entries.len())).await;
+
+                            for entry in &entries {
+                                if let Some(url) = entry.get("url").and_then(|v| v.as_str()) {
+                                    let _ = system_tx_cmd.send(format!("Cloning {}...", url)).await;
+                                    let _ = client
+                                        .post(format!("{}/api/clone", base_url))
+                                        .json(&serde_json::json!({ "url": url }))
+                                        .send()
+                                        .await;
+                                }
+                            }
+
+                            let _ = system_tx_cmd.send(format!("Started {} clones", entries.len())).await;
+                        }
+                        Err(e) => {
+                            let _ = system_tx_cmd.send(format!("Failed to read file: {}", e)).await;
+                        }
+                    }
                 }
             }
         }

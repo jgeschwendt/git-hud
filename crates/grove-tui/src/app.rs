@@ -10,9 +10,9 @@ use tui_textarea::TextArea;
 pub const COMMANDS: &[(&str, &str)] = &[
     ("/clone", "Clone a repository"),
     ("/list", "List repositories"),
-    ("/harvest", "Refresh all repositories"),
+    ("/harvest", "Export repos to seed file"),
+    ("/grow", "Import repos from seed file"),
     ("/help", "Show available commands"),
-    ("/grow", "Create a new worktree"),
     ("/exit", "Exit grove"),
 ];
 
@@ -42,11 +42,15 @@ pub enum Mode {
 /// Commands to execute
 #[derive(Debug, Clone)]
 pub enum Command {
+    /// Clone a repository
     Clone(String),
-    CreateWorktree { repo_id: String, branch: String },
-    DeleteWorktree { path: String },
-    Open(String),
-    Refresh(String),
+    /// List repositories
+    List,
+    /// Export repositories to seed file
+    Harvest(String),
+    /// Import repositories from seed file
+    Grow(String),
+    /// Exit the application
     Quit,
 }
 
@@ -333,8 +337,8 @@ impl ChatApp {
                     content: r#"Commands:
   /clone <url>           Clone a repository
   /list                  List repositories
-  /harvest               Refresh all
-  /grow <branch>         Create worktree
+  /harvest <file>        Export repos to seed file
+  /grow <file>           Import repos from seed file
   /exit                  Exit grove
 
 Navigation:
@@ -348,11 +352,6 @@ Navigation:
             "/clone" => {
                 if let Some(url) = parts.get(1) {
                     self.command_tx.send(Command::Clone(url.to_string())).await?;
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Cloning {}...", url),
-                        timestamp: Local::now(),
-                    });
                 } else {
                     self.messages.push(Message {
                         role: Role::System,
@@ -362,30 +361,19 @@ Navigation:
                 }
             }
             "/list" => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "Listing repositories...".to_string(),
-                    timestamp: Local::now(),
-                });
+                self.command_tx.send(Command::List).await?;
             }
             "/harvest" => {
-                self.messages.push(Message {
-                    role: Role::System,
-                    content: "Refreshing all repositories...".to_string(),
-                    timestamp: Local::now(),
-                });
+                let file = parts.get(1).map(|s| s.to_string()).unwrap_or_else(|| "seed.jsonl".to_string());
+                self.command_tx.send(Command::Harvest(file)).await?;
             }
             "/grow" => {
-                if let Some(branch) = parts.get(1) {
-                    self.messages.push(Message {
-                        role: Role::System,
-                        content: format!("Creating worktree for {}...", branch),
-                        timestamp: Local::now(),
-                    });
+                if let Some(file) = parts.get(1) {
+                    self.command_tx.send(Command::Grow(file.to_string())).await?;
                 } else {
                     self.messages.push(Message {
                         role: Role::System,
-                        content: "Usage: /grow <branch>".to_string(),
+                        content: "Usage: /grow <file>".to_string(),
                         timestamp: Local::now(),
                     });
                 }
