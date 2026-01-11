@@ -84,12 +84,24 @@ fn render_messages(frame: &mut Frame, app: &ChatApp, area: Rect) {
         lines.push(Line::raw("")); // Spacing
     }
 
-    // Calculate scroll
-    let visible_height = inner.height as usize;
-    let total_lines = lines.len();
+    // Calculate visual line count accounting for wrapping
+    let width = inner.width as usize;
+    let total_visual_lines: usize = lines
+        .iter()
+        .map(|line| {
+            let line_len: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+            if line_len == 0 {
+                1
+            } else {
+                (line_len + width - 1) / width.max(1)
+            }
+        })
+        .sum();
 
-    let scroll = if total_lines > visible_height {
-        let max_scroll = total_lines - visible_height;
+    let visible_height = inner.height as usize;
+
+    let scroll = if total_visual_lines > visible_height {
+        let max_scroll = total_visual_lines - visible_height;
         max_scroll.saturating_sub(app.scroll_offset)
     } else {
         0

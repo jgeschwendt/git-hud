@@ -1778,7 +1778,7 @@ dependencies = [
 
 [[package]]
 name = "grove-api"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "grove-cli"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1823,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "grove-core"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1841,7 +1841,7 @@ dependencies = [
 
 [[package]]
 name = "grove-tui"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "anyhow",
  "chrono",

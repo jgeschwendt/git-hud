@@ -1,7 +1,7 @@
 //! Chat application state and event handling
 
 use chrono::{DateTime, Local};
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers, MouseEventKind};
 use ratatui::prelude::*;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -95,16 +95,34 @@ impl ChatApp {
 
     /// Run the TUI event loop
     pub async fn run(&mut self, terminal: &mut Terminal<impl Backend>) -> anyhow::Result<()> {
+        // Enable mouse capture
+        crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+
+        let result = self.event_loop(terminal).await;
+
+        // Disable mouse capture
+        crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
+
+        result
+    }
+
+    async fn event_loop(&mut self, terminal: &mut Terminal<impl Backend>) -> anyhow::Result<()> {
         loop {
             // Draw UI
             terminal.draw(|frame| crate::ui::render(frame, self))?;
 
             // Poll for events (50ms timeout)
             if event::poll(Duration::from_millis(50))? {
-                if let Event::Key(key) = event::read()? {
-                    if self.handle_key(key).await? {
-                        break; // Quit signal
+                match event::read()? {
+                    Event::Key(key) => {
+                        if self.handle_key(key).await? {
+                            break; // Quit signal
+                        }
                     }
+                    Event::Mouse(mouse) => {
+                        self.handle_mouse(mouse);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -264,6 +282,15 @@ Navigation:
         }
 
         Ok(())
+    }
+
+    /// Handle mouse event
+    fn handle_mouse(&mut self, mouse: event::MouseEvent) {
+        match mouse.kind {
+            MouseEventKind::ScrollUp => self.scroll_up(3),
+            MouseEventKind::ScrollDown => self.scroll_down(3),
+            _ => {}
+        }
     }
 
     fn scroll_up(&mut self, n: usize) {
