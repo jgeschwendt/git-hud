@@ -199,7 +199,6 @@ async fn run_tui(
 
     // Create channel for system messages to the TUI
     let (system_tx, system_rx) = tokio::sync::mpsc::channel::<String>(16);
-    app.set_system_receiver(system_rx);
 
     // If update was just applied, send message
     if update_applied {
@@ -373,7 +372,7 @@ async fn run_tui(
     });
 
     // Run event loop
-    let result = app.run(&mut terminal).await;
+    let result = app.run(&mut terminal, system_rx).await;
 
     // Restore terminal
     ratatui::restore();

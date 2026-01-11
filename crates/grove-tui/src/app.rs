@@ -82,8 +82,6 @@ pub struct ChatApp {
     pub autocomplete_index: usize,
     /// Locked autocomplete height (set when autocomplete opens)
     pub autocomplete_height: Option<usize>,
-    /// Receiver for system messages (e.g., from updater)
-    system_rx: Option<mpsc::Receiver<String>>,
     /// Index of the update status message (to update in place)
     update_message_index: Option<usize>,
 }
@@ -111,24 +109,22 @@ impl ChatApp {
             command_tx,
             autocomplete_index: 0,
             autocomplete_height: None,
-            system_rx: None,
             update_message_index: None,
         };
 
         (app, command_rx)
     }
 
-    /// Set the system message receiver (for update status, etc.)
-    pub fn set_system_receiver(&mut self, rx: mpsc::Receiver<String>) {
-        self.system_rx = Some(rx);
-    }
-
     /// Run the TUI event loop
-    pub async fn run(&mut self, terminal: &mut Terminal<impl Backend>) -> anyhow::Result<()> {
+    pub async fn run(
+        &mut self,
+        terminal: &mut Terminal<impl Backend>,
+        mut system_rx: mpsc::Receiver<String>,
+    ) -> anyhow::Result<()> {
         // Enable mouse capture
         crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
 
-        let result = self.event_loop(terminal).await;
+        let result = self.event_loop(terminal, &mut system_rx).await;
 
         // Disable mouse capture
         crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
@@ -136,7 +132,11 @@ impl ChatApp {
         result
     }
 
-    async fn event_loop(&mut self, terminal: &mut Terminal<impl Backend>) -> anyhow::Result<()> {
+    async fn event_loop(
+        &mut self,
+        terminal: &mut Terminal<impl Backend>,
+        system_rx: &mut mpsc::Receiver<String>,
+    ) -> anyhow::Result<()> {
         let mut event_stream = crossterm::event::EventStream::new();
         use futures::StreamExt;
 
@@ -162,14 +162,8 @@ impl ChatApp {
                         }
                     }
                 }
-                // System messages (from updater, etc.)
-                Some(msg) = async {
-                    if let Some(ref mut rx) = self.system_rx {
-                        rx.recv().await
-                    } else {
-                        std::future::pending::<Option<String>>().await
-                    }
-                } => {
+                // System messages (from updater, commands, etc.)
+                Some(msg) = system_rx.recv() => {
                     self.handle_system_message(msg);
                 }
             }
@@ -304,9 +298,11 @@ impl ChatApp {
             timestamp: Local::now(),
         });
 
-        // Clear input
+        // Clear input and reset autocomplete
         self.input.select_all();
         self.input.cut();
+        self.autocomplete_index = 0;
+        self.autocomplete_height = None;
         self.scroll_to_bottom();
 
         // Handle command or natural language
