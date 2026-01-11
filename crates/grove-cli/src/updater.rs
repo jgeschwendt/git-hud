@@ -342,6 +342,14 @@ pub fn check_for_updates_background() -> bool {
         }
     };
 
+    // Skip update check if we just applied an update.
+    // The running binary's version is stale (compiled-in), so it would
+    // re-download the same version. Next run will be the new binary.
+    if updated {
+        log("Skipping update check - just applied staged update");
+        return true;
+    }
+
     // Spawn background task to check for updates
     tokio::spawn(async move {
         if let Err(e) = check_and_download().await {
